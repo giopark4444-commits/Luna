@@ -11,10 +11,15 @@ VERSION="1.0"
 APP_BUNDLE="$SCRIPT_DIR/$APP_NAME.app"
 DMG_PATH="$SCRIPT_DIR/$APP_NAME-$VERSION.dmg"
 
-# ── 1. Compilar ────────────────────────────────────────────────────
-echo "🌙  Compilando $APP_NAME..."
+# ── 1. Compilar binario UNIVERSAL (arm64 + x86_64) ─────────────────
+# Se usa swiftc + lipo para no requerir Xcode completo (basta con
+# Command Line Tools). Así Luna corre en Apple Silicon e Intel.
+echo "🌙  Compilando $APP_NAME (universal: arm64 + x86_64)..."
 cd "$SCRIPT_DIR"
-swift build -c release 2>&1
+BUILD_TMP=$(mktemp -d)
+swiftc -O -target arm64-apple-macos13  Sources/Luna/*.swift -o "$BUILD_TMP/$APP_NAME-arm64"
+swiftc -O -target x86_64-apple-macos13 Sources/Luna/*.swift -o "$BUILD_TMP/$APP_NAME-x86_64"
+lipo -create "$BUILD_TMP/$APP_NAME-arm64" "$BUILD_TMP/$APP_NAME-x86_64" -o "$BUILD_TMP/$APP_NAME"
 
 # ── 2. Crear estructura .app ───────────────────────────────────────
 echo "📦  Empaquetando $APP_NAME.app..."
@@ -22,29 +27,11 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
-cp ".build/release/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+cp "$BUILD_TMP/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+rm -rf "$BUILD_TMP"
+echo "  ✓  Binario universal: $(lipo -archs "$APP_BUNDLE/Contents/MacOS/$APP_NAME")"
 
-# ── 3. Bundlear m1ddc dentro de la app ────────────────────────────
-M1DDC_SRC=""
-for candidate in \
-    "/opt/homebrew/bin/m1ddc" \
-    "/usr/local/bin/m1ddc" \
-    "$(which m1ddc 2>/dev/null || true)"; do
-    if [ -x "$candidate" ]; then
-        M1DDC_SRC="$candidate"
-        break
-    fi
-done
-
-if [ -n "$M1DDC_SRC" ]; then
-    cp "$M1DDC_SRC" "$APP_BUNDLE/Contents/Resources/m1ddc"
-    chmod +x "$APP_BUNDLE/Contents/Resources/m1ddc"
-    echo "  ✓  m1ddc bundleado desde $M1DDC_SRC"
-else
-    echo "  ⚠  m1ddc no encontrado — los monitores DDC no funcionarán sin él"
-fi
-
-# ── 4. Info.plist ─────────────────────────────────────────────────
+# ── 3. Info.plist ─────────────────────────────────────────────────
 cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -76,12 +63,12 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 </plist>
 EOF
 
-# ── 5. Firma ad-hoc (evita el warning de "dañada" en macOS) ───────
+# ── 4. Firma ad-hoc (evita el warning de "dañada" en macOS) ───────
 echo "✍️   Firmando app (ad-hoc)..."
 codesign --force --deep --sign - "$APP_BUNDLE" 2>&1
 echo "  ✓  Firmada"
 
-# ── 6. Crear DMG ──────────────────────────────────────────────────
+# ── 5. Crear DMG ──────────────────────────────────────────────────
 echo "💿  Creando $APP_NAME-$VERSION.dmg..."
 rm -f "$DMG_PATH"
 
@@ -95,24 +82,23 @@ Luna — Control de brillo de monitores
 ======================================
 
 INSTALAR
-  1. Arrastra Luna.app a /Aplicaciones (o a donde prefieras).
-  2. Abre Luna desde Launchpad o /Aplicaciones.
-  3. En el primer arranque macOS puede mostrar un aviso de seguridad.
-     Si ocurre, abre una Terminal y ejecuta:
-
+  1. Arrastra Luna.app a /Aplicaciones.
+  2. La PRIMERA vez: clic derecho sobre Luna.app → "Abrir" → "Abrir".
+     (macOS muestra un aviso porque la app no está notarizada por Apple;
+     esto solo pasa la primera vez.)
+     Alternativa por Terminal:
        xattr -dr com.apple.quarantine /Applications/Luna.app
-
-  4. El ícono ☽ aparecerá en la barra de menú.
+  3. El ícono ☽ aparecerá en la barra de menú.
 
 REQUISITOS
   • macOS 13 (Ventura) o superior
-  • Mac con chip Apple Silicon (M1 / M2 / M3 / M4 …)
-  • m1ddc está incluido dentro de la app (no hace falta instalarlo).
-    Solo funciona con monitores conectados por USB-C / Thunderbolt.
-    Los monitores por HDMI usan control de brillo por software.
+  • Cualquier Mac: Apple Silicon (M1/M2/M3/M4…) o Intel (binario universal)
 
-NOTA: Night Shift usa la API privada CBBlueLightClient de macOS.
-      Funciona sin permisos adicionales.
+CÓMO FUNCIONA
+  El brillo se controla con una capa de atenuado por software, así que
+  funciona con CUALQUIER monitor y conexión (HDMI, USB-C, integrada, etc.).
+  Solo puede oscurecer respecto al brillo físico actual del panel.
+  Night Shift usa la API CBBlueLightClient de macOS, sin permisos extra.
 READMEEOF
 
 hdiutil create \
