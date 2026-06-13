@@ -31,6 +31,12 @@ cp "$BUILD_TMP/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 rm -rf "$BUILD_TMP"
 echo "  ✓  Binario universal: $(lipo -archs "$APP_BUNDLE/Contents/MacOS/$APP_NAME")"
 
+# Ícono de la app
+if [ -f "$SCRIPT_DIR/Luna.icns" ]; then
+    cp "$SCRIPT_DIR/Luna.icns" "$APP_BUNDLE/Contents/Resources/Luna.icns"
+    echo "  ✓  Ícono incluido"
+fi
+
 # ── 3. Info.plist ─────────────────────────────────────────────────
 cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -38,6 +44,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
+    <string>Luna</string>
+    <key>CFBundleIconFile</key>
     <string>Luna</string>
     <key>CFBundleIdentifier</key>
     <string>com.luna.menubar</string>

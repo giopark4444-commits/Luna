@@ -3,6 +3,7 @@ import SwiftUI
 struct LunaView: View {
     @ObservedObject var displayManager: DisplayManager
     @ObservedObject var nightShift: NightShiftManager = .shared
+    @ObservedObject var loginItem: LoginItem = .shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -28,6 +29,8 @@ struct LunaView: View {
                 Divider()
                 nightShiftSection
             }
+            Divider()
+            loginRow
             Divider()
             footer
         }
@@ -108,6 +111,27 @@ struct LunaView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: nightShift.isEnabled)
+    }
+
+    private var loginRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "power")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Text("Abrir al iniciar sesión")
+                .font(.system(size: 12, weight: .medium))
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { loginItem.isEnabled },
+                set: { loginItem.set($0) }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .scaleEffect(0.75)
+            .frame(width: 38)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 
     private var footer: some View {
