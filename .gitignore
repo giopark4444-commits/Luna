@@ -1,0 +1,11 @@
+# Swift / SwiftPM build artifacts
+.build/
+*.dSYM/
+.swiftpm/
+
+# Binarios (se distribuyen como GitHub Release)
+Luna.app/
+*.dmg
+
+# macOS
+.DS_Store
