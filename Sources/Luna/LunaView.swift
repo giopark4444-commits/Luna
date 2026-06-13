@@ -4,6 +4,7 @@ struct LunaView: View {
     @ObservedObject var displayManager: DisplayManager
     @ObservedObject var nightShift: NightShiftManager = .shared
     @ObservedObject var loginItem: LoginItem = .shared
+    var onCalibrate: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -29,6 +30,8 @@ struct LunaView: View {
                 Divider()
                 nightShiftSection
             }
+            Divider()
+            calibrateRow
             Divider()
             loginRow
             Divider()
@@ -118,6 +121,23 @@ struct LunaView: View {
         let s = max(0, min(1, nightShift.strength))
         // Saturación 0 = blanco; al subir se satura hacia el naranja cálido.
         return Color(hue: 0.08, saturation: s, brightness: 1.0)
+    }
+
+    private var calibrateRow: some View {
+        Button(action: onCalibrate) {
+            HStack(spacing: 8) {
+                Image(systemName: "paintpalette")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                Text("Calibrar monitores…")
+                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 
     private var loginRow: some View {

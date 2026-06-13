@@ -6,6 +6,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private let displayManager = DisplayManager()
+    private let calibration = CalibrationController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -34,7 +35,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupPopover() {
-        let view = LunaView(displayManager: displayManager)
+        let view = LunaView(displayManager: displayManager, onCalibrate: { [weak self] in
+            self?.startCalibration()
+        })
         let hostingVC = NSHostingController(rootView: view)
         // Que el popover se ajuste al alto real del contenido (evita que se
         // recorte cuando aparece/desaparece una fila, p. ej. Night Shift).
@@ -59,5 +62,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func displaysChanged() {
         displayManager.refresh()
+    }
+
+    private func startCalibration() {
+        if popover.isShown { popover.performClose(nil) }
+        calibration.enter(displayManager: displayManager)
     }
 }

@@ -11,8 +11,12 @@ struct DisplayInfo: Identifiable {
 class DisplayManager: ObservableObject {
     @Published var displays: [DisplayInfo] = []
     @Published var masterBrightness: Double = 1.0
+    @Published private(set) var calibrations: [String: DisplayCalibration] = [:]
 
-    init() { refresh() }
+    init() {
+        calibrations = CalibrationStore.loadAll()
+        refresh()
+    }
 
     /// Enumera los monitores conectados (vía NSScreen) y los controla todos por
     /// overlay: uniforme entre monitores e instantáneo (sin DDC ni subprocesos).
@@ -32,7 +36,44 @@ class DisplayManager: ObservableObject {
         updateMaster()
 
         // Reaplicar por si cambió la geometría de algún monitor.
-        for d in displays { OverlayDimmer.shared.setBrightness(d.brightness, for: d.id) }
+        for d in displays {
+            OverlayDimmer.shared.setBrightness(d.brightness, for: d.id)
+            applyCalibration(calibration(for: d.name), to: d)
+        }
+    }
+
+    // MARK: - Calibración de color
+
+    func calibration(for name: String) -> DisplayCalibration {
+        calibrations[name] ?? .neutral
+    }
+
+    func setCalibration(_ cal: DisplayCalibration, for name: String) {
+        calibrations[name] = cal
+        CalibrationStore.saveAll(calibrations)
+        for d in displays where d.name == name { applyCalibration(cal, to: d) }
+    }
+
+    /// Restablece a neutro pero conserva el método (gamma/overlay) elegido.
+    func resetCalibration(for name: String) {
+        var cal = DisplayCalibration.neutral
+        cal.method = calibration(for: name).method
+        setCalibration(cal, for: name)
+    }
+
+    private func applyCalibration(_ cal: DisplayCalibration, to display: DisplayInfo) {
+        switch cal.method {
+        case .gamma:
+            OverlayDimmer.shared.clearTint(for: display.id)
+            cal.applyGamma(to: display.id)
+        case .overlay:
+            DisplayCalibration.resetGamma(display.id)
+            if let t = cal.overlayTint() {
+                OverlayDimmer.shared.setTint(r: t.r, g: t.g, b: t.b, alpha: t.alpha, for: display.id)
+            } else {
+                OverlayDimmer.shared.clearTint(for: display.id)
+            }
+        }
     }
 
     func setBrightness(_ value: Double, for id: CGDirectDisplayID) {
@@ -54,9 +95,10 @@ class DisplayManager: ObservableObject {
         }
     }
 
-    /// Limpieza al salir: quita todas las capas de atenuado.
+    /// Limpieza al salir: quita capas de atenuado y restaura la curva de color.
     func restoreDisplays() {
         OverlayDimmer.shared.removeAll()
+        CGDisplayRestoreColorSyncSettings()
     }
 
     // MARK: - Private

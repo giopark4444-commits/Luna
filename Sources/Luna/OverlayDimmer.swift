@@ -13,7 +13,8 @@ import Cocoa
 final class OverlayDimmer {
     static let shared = OverlayDimmer()
 
-    private var windows: [CGDirectDisplayID: NSWindow] = [:]
+    private var windows: [CGDirectDisplayID: NSWindow] = [:]       // brillo (capa negra)
+    private var tintWindows: [CGDirectDisplayID: NSWindow] = [:]   // tinte de color (calibración)
 
     /// Nunca dejamos la pantalla totalmente negra: tope de opacidad de la capa.
     private let maxDim = 0.92
@@ -37,10 +38,31 @@ final class OverlayDimmer {
         window.orderFrontRegardless()
     }
 
+    /// Capa de color para aproximar el punto blanco (método overlay de calibración).
+    func setTint(r: Double, g: Double, b: Double, alpha: Double, for cgID: CGDirectDisplayID) {
+        if alpha <= 0.001 {
+            tintWindows[cgID]?.orderOut(nil)
+            return
+        }
+        guard let screen = Self.screen(for: cgID) else { return }
+        let window = tintWindows[cgID] ?? makeWindow()
+        tintWindows[cgID] = window
+        window.backgroundColor = NSColor(srgbRed: CGFloat(r), green: CGFloat(g), blue: CGFloat(b), alpha: 1)
+        window.setFrame(screen.frame, display: true)
+        window.alphaValue = CGFloat(min(maxDim, alpha))
+        window.orderFrontRegardless()
+    }
+
+    func clearTint(for cgID: CGDirectDisplayID) {
+        tintWindows[cgID]?.orderOut(nil)
+    }
+
     /// Quita todas las capas (al salir de la app).
     func removeAll() {
         for window in windows.values { window.orderOut(nil) }
+        for window in tintWindows.values { window.orderOut(nil) }
         windows.removeAll()
+        tintWindows.removeAll()
     }
 
     // MARK: - Private
