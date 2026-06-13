@@ -36,6 +36,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupPopover() {
         let view = LunaView(displayManager: displayManager)
         let hostingVC = NSHostingController(rootView: view)
+        // Que el popover se ajuste al alto real del contenido (evita que se
+        // recorte cuando aparece/desaparece una fila, p. ej. Night Shift).
+        hostingVC.sizingOptions = [.preferredContentSize]
         popover = NSPopover()
         popover.contentViewController = hostingVC
         popover.behavior = .transient

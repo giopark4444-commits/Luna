@@ -100,10 +100,10 @@ struct LunaView: View {
                         ),
                         in: 0.0...1.0
                     )
-                    .tint(.orange)
+                    .tint(nightShiftTint)
                     Image(systemName: "thermometer.high")
                         .font(.system(size: 10))
-                        .foregroundStyle(.orange.opacity(0.8))
+                        .foregroundStyle(nightShiftTint)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
@@ -111,6 +111,15 @@ struct LunaView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: nightShift.isEnabled)
+    }
+
+    /// Color de la barra de Night Shift: ámbar suave en baja intensidad →
+    /// amarillo dorado intenso a medida que sube la potencia.
+    private var nightShiftTint: Color {
+        let s = max(0, min(1, nightShift.strength))
+        let hue = 0.090 + 0.050 * s        // 0.09 (naranja-ámbar) → 0.14 (amarillo)
+        let saturation = 0.62 + 0.38 * s   // más saturado cuanto más potente
+        return Color(hue: hue, saturation: saturation, brightness: 1.0)
     }
 
     private var loginRow: some View {
