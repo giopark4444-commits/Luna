@@ -19,8 +19,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Restore any gamma overrides when the app quits
-        displayManager.restoreGamma()
+        // Quita las capas de atenuado y restaura la gamma al salir
+        displayManager.restoreDisplays()
     }
 
     private func setupStatusItem() {

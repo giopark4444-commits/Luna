@@ -43,9 +43,6 @@ struct LunaView: View {
             Text("Luna")
                 .font(.system(size: 13, weight: .semibold))
             Spacer()
-            if displayManager.isRefreshing {
-                ProgressView().scaleEffect(0.6).frame(width: 16, height: 16)
-            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 13)
@@ -137,8 +134,7 @@ struct DisplayRow: View {
             label: display.name,
             icon: "display",
             brightness: $brightness,
-            available: true,
-            isSoftware: display.isGammaOnly
+            available: true
         )
     }
 }
@@ -150,7 +146,6 @@ struct BrightnessRow: View {
     let icon: String
     @Binding var brightness: Double
     let available: Bool
-    var isSoftware: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -162,14 +157,6 @@ struct BrightnessRow: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                if isSoftware {
-                    Text("software")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
-                }
                 Spacer()
                 Text("\(Int(brightness * 100))%")
                     .font(.system(size: 11).monospacedDigit())

@@ -1,0 +1,73 @@
+import Cocoa
+
+/// Atenuado por software mediante una ventana negra translúcida superpuesta.
+///
+/// Es el método más robusto: funciona en cualquier monitor sin importar si
+/// responde a DDC o si su modo de vídeo (HDR, alta frecuencia con DSC, etc.)
+/// hace que macOS ignore el LUT de gamma. Mantiene una ventana por monitor y
+/// ajusta su opacidad: brillo 1.0 → sin capa, brillo bajo → capa más oscura.
+///
+/// Limitación inherente: solo puede *oscurecer* respecto al brillo físico del
+/// panel; no puede subir más allá de lo que el monitor ya emite.
+@MainActor
+final class OverlayDimmer {
+    static let shared = OverlayDimmer()
+
+    private var windows: [CGDirectDisplayID: NSWindow] = [:]
+
+    /// Nunca dejamos la pantalla totalmente negra: tope de opacidad de la capa.
+    private let maxDim = 0.92
+
+    /// `brightness` en 0.05–1.0 (1.0 = sin atenuar).
+    func setBrightness(_ brightness: Double, for cgID: CGDirectDisplayID) {
+        let dim = max(0.0, min(maxDim, 1.0 - brightness))
+
+        // Sin atenuar: no hace falta ventana (oculta la existente si la hay).
+        if dim <= 0.001 {
+            windows[cgID]?.orderOut(nil)
+            return
+        }
+
+        guard let screen = Self.screen(for: cgID) else { return }
+        let window = windows[cgID] ?? makeWindow()
+        windows[cgID] = window
+        // Reajustar al marco actual del monitor (por si cambió de resolución).
+        window.setFrame(screen.frame, display: true)
+        window.alphaValue = CGFloat(dim)
+        window.orderFrontRegardless()
+    }
+
+    /// Quita todas las capas (al salir de la app).
+    func removeAll() {
+        for window in windows.values { window.orderOut(nil) }
+        windows.removeAll()
+    }
+
+    // MARK: - Private
+
+    private func makeWindow() -> NSWindow {
+        let window = NSWindow(
+            contentRect: .zero,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .black
+        window.hasShadow = false
+        window.ignoresMouseEvents = true              // clics pasan a través
+        window.alphaValue = 0
+        // .screenSaver compone de forma fiable en todos los monitores (incluido el
+        // LC49G95T a 120Hz, donde CGShieldingWindowLevel no se mostraba). Cubre
+        // contenido y pantalla completa; el cursor sigue visible por encima.
+        window.level = .screenSaver
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        return window
+    }
+
+    private static func screen(for cgID: CGDirectDisplayID) -> NSScreen? {
+        NSScreen.screens.first { screen in
+            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == cgID
+        }
+    }
+}
