@@ -93,17 +93,16 @@ struct LunaView: View {
                     Image(systemName: "thermometer.low")
                         .font(.system(size: 10))
                         .foregroundStyle(.tertiary)
-                    Slider(
+                    ColorSlider(
                         value: Binding(
                             get: { nightShift.strength },
                             set: { nightShift.setStrength($0) }
                         ),
-                        in: 0.0...1.0
+                        fill: nightShiftTint
                     )
-                    .tint(nightShiftTint)
                     Image(systemName: "thermometer.high")
                         .font(.system(size: 10))
-                        .foregroundStyle(nightShiftTint)
+                        .foregroundStyle(Color(hue: 0.08, saturation: 1.0, brightness: 1.0))
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
@@ -117,9 +116,8 @@ struct LunaView: View {
     /// amarillo dorado intenso a medida que sube la potencia.
     private var nightShiftTint: Color {
         let s = max(0, min(1, nightShift.strength))
-        let hue = 0.090 + 0.050 * s        // 0.09 (naranja-ámbar) → 0.14 (amarillo)
-        let saturation = 0.62 + 0.38 * s   // más saturado cuanto más potente
-        return Color(hue: hue, saturation: saturation, brightness: 1.0)
+        // Saturación 0 = blanco; al subir se satura hacia el naranja cálido.
+        return Color(hue: 0.08, saturation: s, brightness: 1.0)
     }
 
     private var loginRow: some View {
@@ -208,5 +206,47 @@ struct BrightnessRow: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+}
+
+// MARK: - Slider coloreable (el Slider nativo de macOS ignora .tint)
+
+struct ColorSlider: View {
+    @Binding var value: Double           // 0.0 – 1.0
+    var fill: Color
+
+    private let trackHeight: CGFloat = 5
+    private let knob: CGFloat = 14
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let usable = max(1, w - knob)
+            let clamped = max(0, min(1, value))
+            let center = knob / 2 + clamped * usable
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.primary.opacity(0.12))
+                    .frame(height: trackHeight)
+                Capsule()
+                    .fill(fill)
+                    .frame(width: center, height: trackHeight)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: knob, height: knob)
+                    .shadow(color: .black.opacity(0.25), radius: 1, y: 0.5)
+                    .position(x: center, y: geo.size.height / 2)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { g in
+                        value = max(0, min(1, Double((g.location.x - knob / 2) / usable)))
+                    }
+            )
+        }
+        .frame(height: knob)
     }
 }
