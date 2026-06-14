@@ -4,15 +4,20 @@ import SwiftUI
 /// Patrones de prueba que se muestran a pantalla completa para comparar al ojo.
 enum CalibrationPattern: String, CaseIterable, Identifiable {
     case stairs, gray50, white, black, colorBars, gradient
+    case solidRed, solidGreen, solidBlue, skin
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .stairs:    return "Escalera"
-        case .gray50:    return "Gris 50%"
-        case .white:     return "Blanco"
-        case .black:     return "Negro"
-        case .colorBars: return "Barras"
-        case .gradient:  return "Degradado"
+        case .stairs:     return "Escalera de grises"
+        case .gray50:     return "Gris 50%"
+        case .white:      return "Blanco"
+        case .black:      return "Negro"
+        case .colorBars:  return "Barras de color"
+        case .gradient:   return "Degradado continuo"
+        case .solidRed:   return "Rojo sólido"
+        case .solidGreen: return "Verde sólido"
+        case .solidBlue:  return "Azul sólido"
+        case .skin:       return "Tono piel"
         }
     }
 }
@@ -42,6 +47,10 @@ final class CalibrationController: NSObject, ObservableObject, NSWindowDelegate 
         if referenceDisplayID == nil || !displayManager.displays.contains(where: { $0.id == referenceDisplayID }) {
             referenceDisplayID = displayManager.displays.first(where: { CGDisplayIsMain($0.id) != 0 })?.id
                 ?? displayManager.displays.first?.id
+        }
+        // Primer pase automático la primera vez (aún no hay nada calibrado).
+        if displayManager.calibrations.isEmpty {
+            displayManager.autoCalibrate(referenceID: referenceDisplayID)
         }
         showPatternWindows()
         showPanel(displayManager: displayManager)
@@ -125,6 +134,10 @@ struct PatternView: View {
             case .stairs: stairs
             case .colorBars: colorBars
             case .gradient: gradient
+            case .solidRed:   Color(red: 0.80, green: 0, blue: 0)
+            case .solidGreen: Color(red: 0, green: 0.70, blue: 0)
+            case .solidBlue:  Color(red: 0, green: 0, blue: 0.85)
+            case .skin:       Color(red: 0.95, green: 0.80, blue: 0.69)
             }
         }
         .ignoresSafeArea()

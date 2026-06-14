@@ -12,9 +12,13 @@ class DisplayManager: ObservableObject {
     @Published var displays: [DisplayInfo] = []
     @Published var masterBrightness: Double = 1.0
     @Published private(set) var calibrations: [String: DisplayCalibration] = [:]
+    @Published private(set) var calibrationEnabled: Bool = true
+
+    private let calibEnabledKey = "luna.calibrationEnabled"
 
     init() {
         calibrations = CalibrationStore.loadAll()
+        calibrationEnabled = UserDefaults.standard.object(forKey: calibEnabledKey) as? Bool ?? true
         refresh()
     }
 
@@ -54,14 +58,54 @@ class DisplayManager: ObservableObject {
         for d in displays where d.name == name { applyCalibration(cal, to: d) }
     }
 
-    /// Restablece a neutro pero conserva el método (gamma/overlay) elegido.
+    /// Restablece a neutro pero conserva el método (gamma/overlay/manual) elegido.
     func resetCalibration(for name: String) {
         var cal = DisplayCalibration.neutral
         cal.method = calibration(for: name).method
         setCalibration(cal, for: name)
     }
 
+    /// Primer pase automático: alinea el punto blanco de cada monitor al de la
+    /// referencia usando su perfil de color (ICC). Conserva gamma/negros/método.
+    @discardableResult
+    func autoCalibrate(referenceID: CGDirectDisplayID?) -> Bool {
+        let refID = referenceID
+            ?? displays.first(where: { CGDisplayIsMain($0.id) != 0 })?.id
+            ?? displays.first?.id
+        guard let refID, let refProfile = AutoCalibrate.profile(for: refID) else { return false }
+
+        for d in displays {
+            var cal = calibration(for: d.name)
+            if d.id == refID {
+                cal.rGain = 1; cal.gGain = 1; cal.bGain = 1
+            } else if let g = AutoCalibrate.gains(for: d.id, targetWhite: refProfile.white) {
+                cal.rGain = g.0; cal.gGain = g.1; cal.bGain = g.2
+            } else {
+                continue
+            }
+            calibrations[d.name] = cal
+        }
+        calibrationEnabled = true
+        UserDefaults.standard.set(true, forKey: calibEnabledKey)
+        CalibrationStore.saveAll(calibrations)
+        for d in displays { applyCalibration(calibration(for: d.name), to: d) }
+        return true
+    }
+
+    /// Activa/desactiva toda la calibración (conserva los valores guardados).
+    func setCalibrationEnabled(_ on: Bool) {
+        calibrationEnabled = on
+        UserDefaults.standard.set(on, forKey: calibEnabledKey)
+        for d in displays { applyCalibration(calibration(for: d.name), to: d) }
+    }
+
     private func applyCalibration(_ cal: DisplayCalibration, to display: DisplayInfo) {
+        // Desactivada globalmente o "manual" (menú del monitor): Luna no toca el color.
+        guard calibrationEnabled, cal.method != .manual else {
+            OverlayDimmer.shared.clearTint(for: display.id)
+            DisplayCalibration.resetGamma(display.id)
+            return
+        }
         switch cal.method {
         case .gamma:
             OverlayDimmer.shared.clearTint(for: display.id)
@@ -73,6 +117,8 @@ class DisplayManager: ObservableObject {
             } else {
                 OverlayDimmer.shared.clearTint(for: display.id)
             }
+        case .manual:
+            break   // ya manejado en el guard
         }
     }
 

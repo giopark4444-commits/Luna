@@ -5,34 +5,42 @@ import CoreGraphics
 enum CalibrationMethod: String, Codable {
     case gamma      // CGSetDisplayTransferByFormula — calibración real (C49RG9x, Wokyis…)
     case overlay    // capa de color — aproximado (LC49G95T y monitores que ignoran gamma)
+    case manual     // configuración del propio monitor (Luna no toca el color; usas su menú)
 }
 
 /// Parámetros de calibración de un monitor.
+///
+/// Control por canal en tres zonas tonales (modelo Ganancia/Gamma/Negros):
+/// - `?Gain`  → blancos/altas (punto blanco)
+/// - `?Gamma` → medios (balance de color de los tonos medios, no solo grises)
+/// - `black`  → negros/sombras (lift común)
 struct DisplayCalibration: Codable, Equatable {
-    var rGain: Double = 1.0     // 0.5–1.0  (punto blanco)
+    var rGain: Double = 1.0     // 0.5–1.0
     var gGain: Double = 1.0
     var bGain: Double = 1.0
-    var gamma: Double = 1.0     // 0.5–2.0  (claridad de los grises)
-    var black: Double = 0.0     // 0.0–0.2  (nivel de negro / "lift")
+    var rGamma: Double = 1.0    // 0.5–2.0
+    var gGamma: Double = 1.0
+    var bGamma: Double = 1.0
+    var black: Double = 0.0     // 0.0–0.2
     var method: CalibrationMethod = .gamma
 
     static let neutral = DisplayCalibration()
 
     var isNeutral: Bool {
-        rGain == 1.0 && gGain == 1.0 && bGain == 1.0 && gamma == 1.0 && black == 0.0
+        rGain == 1 && gGain == 1 && bGain == 1 &&
+        rGamma == 1 && gGamma == 1 && bGamma == 1 && black == 0
     }
 
     // MARK: - Aplicar
 
-    /// Calibración real vía la curva de la GPU (solo monitores que responden a gamma).
+    /// Calibración real vía la curva por canal de la GPU (monitores que responden a gamma).
     func applyGamma(to cgID: CGDirectDisplayID) {
         let lo = CGGammaValue(black)
-        let g = CGGammaValue(gamma)
         _ = CGSetDisplayTransferByFormula(
             cgID,
-            lo, CGGammaValue(rGain), g,
-            lo, CGGammaValue(gGain), g,
-            lo, CGGammaValue(bGain), g
+            lo, CGGammaValue(rGain), CGGammaValue(rGamma),
+            lo, CGGammaValue(gGain), CGGammaValue(gGamma),
+            lo, CGGammaValue(bGain), CGGammaValue(bGamma)
         )
     }
 
@@ -55,7 +63,7 @@ struct DisplayCalibration: Codable, Equatable {
 
 /// Persistencia de las calibraciones por nombre de monitor.
 enum CalibrationStore {
-    private static let key = "luna.calibrations.v1"
+    private static let key = "luna.calibrations.v2"
 
     static func loadAll() -> [String: DisplayCalibration] {
         guard let data = UserDefaults.standard.data(forKey: key),

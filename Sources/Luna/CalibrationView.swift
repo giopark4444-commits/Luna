@@ -10,9 +10,15 @@ struct CalibrationView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: enabledBinding) {
+                Text("Calibración activada").font(.system(size: 12, weight: .semibold))
+            }
+            .toggleStyle(.switch)
+            Divider()
             patternPicker
             Divider()
             monitorPickers
+            autoSection
             Divider()
             if let d = selected {
                 controls(for: d)
@@ -23,21 +29,22 @@ struct CalibrationView: View {
             footer
         }
         .padding(16)
-        .frame(width: 330)
+        .frame(width: 340)
     }
 
-    // MARK: - Secciones
+    // MARK: - Patrón
 
     private var patternPicker: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("Patrón de prueba").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+        HStack {
+            Text("Patrón").font(.system(size: 11)).frame(width: 70, alignment: .leading)
             Picker("", selection: $controller.pattern) {
                 ForEach(CalibrationPattern.allCases) { p in Text(p.label).tag(p) }
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
         }
     }
+
+    // MARK: - Monitores
 
     private var monitorPickers: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -60,32 +67,80 @@ struct CalibrationView: View {
         }
     }
 
+    // MARK: - Automático
+
+    private var autoSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                displayManager.autoCalibrate(referenceID: controller.referenceDisplayID)
+            } label: {
+                Label("Igualar automático a la referencia", systemImage: "wand.and.stars")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            Text("Primer pase usando el perfil de color de cada monitor. Luego afina abajo.")
+                .font(.system(size: 9)).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 4)
+    }
+
+    // MARK: - Controles del monitor seleccionado
+
     @ViewBuilder
     private func controls(for d: DisplayInfo) -> some View {
         let name = d.name
-        let isOverlay = displayManager.calibration(for: name).method == .overlay
+        let method = displayManager.calibration(for: name).method
+        let enabled = displayManager.calibrationEnabled
 
-        VStack(alignment: .leading, spacing: 7) {
-            sliderRow("Rojo",  calBinding(name, \.rGain), 0.5...1.0)
-            sliderRow("Verde", calBinding(name, \.gGain), 0.5...1.0)
-            sliderRow("Azul",  calBinding(name, \.bGain), 0.5...1.0)
-
-            if isOverlay {
-                Text("Gamma y negros no aplican en este monitor (capa de color, aproximado).")
-                    .font(.system(size: 9)).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
-            } else {
-                sliderRow("Gamma",  calBinding(name, \.gamma), 0.5...2.0)
-                sliderRow("Negros", calBinding(name, \.black), 0.0...0.2)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Método").font(.system(size: 11)).frame(width: 70, alignment: .leading)
+                Picker("", selection: methodBinding(name)) {
+                    Text("Software").tag(CalibrationMethod.gamma)
+                    Text("Capa de color").tag(CalibrationMethod.overlay)
+                    Text("Monitor").tag(CalibrationMethod.manual)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
             }
+            Text(methodHint(method))
+                .font(.system(size: 9)).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
 
+            Group {
+                switch method {
+                case .gamma:
+                    caption("Ganancia (blancos)")
+                    sliderRow("Rojo",  calBinding(name, \.rGain), 0.5...1.0)
+                    sliderRow("Verde", calBinding(name, \.gGain), 0.5...1.0)
+                    sliderRow("Azul",  calBinding(name, \.bGain), 0.5...1.0)
+                    caption("Color de los medios (gamma)")
+                    sliderRow("Rojo",  calBinding(name, \.rGamma), 0.5...2.0)
+                    sliderRow("Verde", calBinding(name, \.gGamma), 0.5...2.0)
+                    sliderRow("Azul",  calBinding(name, \.bGamma), 0.5...2.0)
+                    sliderRow("Negros", calBinding(name, \.black), 0.0...0.2)
+                case .overlay:
+                    caption("Punto blanco (aproximado)")
+                    sliderRow("Rojo",  calBinding(name, \.rGain), 0.5...1.0)
+                    sliderRow("Verde", calBinding(name, \.gGain), 0.5...1.0)
+                    sliderRow("Azul",  calBinding(name, \.bGain), 0.5...1.0)
+                case .manual:
+                    EmptyView()
+                }
+            }
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.4)
+
+            // El brillo es independiente de la calibración (siempre disponible).
             sliderRow("Brillo", brightnessBinding(d), 0.05...1.0)
+        }
+    }
 
-            Toggle(isOn: methodBinding(name)) {
-                Text("Este monitor no responde a gamma → usar capa de color")
-                    .font(.system(size: 10))
-            }
-            .toggleStyle(.checkbox)
-            .padding(.top, 2)
+    private func methodHint(_ method: CalibrationMethod) -> String {
+        switch method {
+        case .gamma:   return "Calibración real por software (lo normal en monitores que responden)."
+        case .overlay: return "Aproximado por capa de color (para monitores que ignoran gamma, p. ej. 120Hz/HDMI)."
+        case .manual:  return "Luna no toca el color: ajústalo en el menú físico del monitor mientras comparas los patrones."
         }
     }
 
@@ -105,6 +160,10 @@ struct CalibrationView: View {
         }
     }
 
+    private func caption(_ text: String) -> some View {
+        Text(text).font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary).padding(.top, 2)
+    }
+
     private func sliderRow(_ label: String, _ value: Binding<Double>, _ range: ClosedRange<Double>) -> some View {
         HStack(spacing: 8) {
             Text(label).font(.system(size: 11)).frame(width: 50, alignment: .leading)
@@ -118,6 +177,13 @@ struct CalibrationView: View {
 
     // MARK: - Bindings
 
+    private var enabledBinding: Binding<Bool> {
+        Binding(
+            get: { displayManager.calibrationEnabled },
+            set: { displayManager.setCalibrationEnabled($0) }
+        )
+    }
+
     private func calBinding(_ name: String, _ keyPath: WritableKeyPath<DisplayCalibration, Double>) -> Binding<Double> {
         Binding(
             get: { displayManager.calibration(for: name)[keyPath: keyPath] },
@@ -129,12 +195,12 @@ struct CalibrationView: View {
         )
     }
 
-    private func methodBinding(_ name: String) -> Binding<Bool> {
+    private func methodBinding(_ name: String) -> Binding<CalibrationMethod> {
         Binding(
-            get: { displayManager.calibration(for: name).method == .overlay },
-            set: { useOverlay in
+            get: { displayManager.calibration(for: name).method },
+            set: { m in
                 var c = displayManager.calibration(for: name)
-                c.method = useOverlay ? .overlay : .gamma
+                c.method = m
                 displayManager.setCalibration(c, for: name)
             }
         )
