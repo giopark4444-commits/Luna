@@ -11,6 +11,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupPopover()
+        NightShiftManager.shared.onChange = { [weak self] in
+            self?.displayManager.reapplyColor()
+        }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(displaysChanged),

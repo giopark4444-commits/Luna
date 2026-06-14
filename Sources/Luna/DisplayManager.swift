@@ -42,9 +42,8 @@ class DisplayManager: ObservableObject {
         // Reaplicar por si cambió la geometría de algún monitor.
         for d in displays {
             OverlayDimmer.shared.setBrightness(d.brightness, for: d.id)
-            applyCalibration(calibration(for: d.name), to: d)
+            applyColor(to: d)
         }
-        NightShiftManager.shared.apply()
     }
 
     // MARK: - Calibración de color
@@ -56,7 +55,7 @@ class DisplayManager: ObservableObject {
     func setCalibration(_ cal: DisplayCalibration, for name: String) {
         calibrations[name] = cal
         CalibrationStore.saveAll(calibrations)
-        for d in displays where d.name == name { applyCalibration(cal, to: d) }
+        for d in displays where d.name == name { applyColor(to: d) }
     }
 
     /// Restablece a neutro pero conserva el método (gamma/overlay/manual) elegido.
@@ -89,7 +88,7 @@ class DisplayManager: ObservableObject {
         calibrationEnabled = true
         UserDefaults.standard.set(true, forKey: calibEnabledKey)
         CalibrationStore.saveAll(calibrations)
-        for d in displays { applyCalibration(calibration(for: d.name), to: d) }
+        for d in displays { applyColor(to: d) }
         return true
     }
 
@@ -97,25 +96,45 @@ class DisplayManager: ObservableObject {
     func setCalibrationEnabled(_ on: Bool) {
         calibrationEnabled = on
         UserDefaults.standard.set(on, forKey: calibEnabledKey)
-        for d in displays { applyCalibration(calibration(for: d.name), to: d) }
+        reapplyColor()
     }
 
-    private func applyCalibration(_ cal: DisplayCalibration, to display: DisplayInfo) {
-        let active = calibrationEnabled && cal.method != .manual
+    /// Reaplica color (calibración + Night Shift) a todos los monitores.
+    func reapplyColor() {
+        for d in displays { applyColor(to: d) }
+    }
 
-        // Capa de tinte (overlay): para monitores que no responden a gamma.
-        if active, cal.method == .overlay, let t = cal.overlayTint() {
+    /// Aplica calibración Y Night Shift juntos por monitor.
+    /// - Monitores con gamma: Night Shift se integra multiplicando las ganancias
+    ///   (look natural tipo Apple, negros intactos), combinado con la calibración.
+    /// - Monitores overlay/manual: Night Shift va por capa ámbar (aproximado).
+    private func applyColor(to display: DisplayInfo) {
+        let cal = calibration(for: display.name)
+        let calActive = calibrationEnabled && cal.method != .manual
+        let warm = NightShiftManager.shared.warmGains()
+
+        // Tinte de calibración (solo método overlay).
+        if calActive, cal.method == .overlay, let t = cal.overlayTint() {
             OverlayDimmer.shared.setTint(r: t.r, g: t.g, b: t.b, alpha: t.alpha, for: display.id)
         } else {
             OverlayDimmer.shared.clearTint(for: display.id)
         }
 
-        // LUT de gamma (Night Shift ahora es overlay, así que no hay conflicto).
-        if active, cal.method == .gamma {
-            cal.applyGamma(to: display.id)
-        } else {
-            DisplayCalibration.resetGamma(display.id)
-        }
+        // Night Shift por gamma (multiplica las ganancias): limpio, negros intactos,
+        // sin capa ámbar (nada de "lechoso"). Se escribe en TODOS los monitores,
+        // independiente del método de calibración: calienta los que aceptan gamma
+        // (C49RG9x, Wokyis) y es inofensivo en los que la ignoran (LC49G95T → usar
+        // su Eye Saver de hardware para luz cálida).
+        OverlayDimmer.shared.setWarm(strength: 0, for: display.id)
+        // La calibración por gamma solo se incluye si ese es el método del monitor.
+        let cg = (calActive && cal.method == .gamma) ? cal : .neutral
+        let lo = CGGammaValue(cg.black)
+        _ = CGSetDisplayTransferByFormula(
+            display.id,
+            lo, CGGammaValue(cg.rGain * warm.r), CGGammaValue(cg.rGamma),
+            lo, CGGammaValue(cg.gGain * warm.g), CGGammaValue(cg.gGamma),
+            lo, CGGammaValue(cg.bGain * warm.b), CGGammaValue(cg.bGamma)
+        )
     }
 
     func setBrightness(_ value: Double, for id: CGDirectDisplayID) {

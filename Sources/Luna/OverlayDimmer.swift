@@ -20,9 +20,10 @@ final class OverlayDimmer {
     /// Nunca dejamos la pantalla totalmente negra: tope de opacidad de la capa.
     private let maxDim = 0.92
 
-    /// Color cálido del Night Shift (ámbar) y opacidad máxima a intensidad 1.0.
-    private let warmColor = (r: 1.0, g: 0.42, b: 0.0)
-    private let maxWarm = 0.55
+    /// Color cálido del Night Shift (ámbar suave, no naranja puro) y opacidad
+    /// máxima a intensidad 1.0 (moderada, para que el máximo no sea insoportable).
+    private let warmColor = (r: 1.0, g: 0.72, b: 0.45)
+    private let maxWarm = 0.34
 
     /// `brightness` en 0.05–1.0 (1.0 = sin atenuar).
     func setBrightness(_ brightness: Double, for cgID: CGDirectDisplayID) {
