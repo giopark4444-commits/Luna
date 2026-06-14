@@ -4,6 +4,9 @@ struct CalibrationView: View {
     @ObservedObject var controller: CalibrationController
     @ObservedObject var displayManager: DisplayManager
 
+    @State private var presetName: String = ""
+    @State private var selectedPreset: String = ""
+
     private var selected: DisplayInfo? {
         displayManager.displays.first { $0.id == controller.selectedDisplayID }
     }
@@ -26,10 +29,12 @@ struct CalibrationView: View {
                 Text("Conecta un monitor").font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Divider()
+            presetsSection
+            Divider()
             footer
         }
         .padding(16)
-        .frame(width: 340)
+        .frame(width: 360)
     }
 
     // MARK: - Patrón
@@ -144,19 +149,56 @@ struct CalibrationView: View {
         }
     }
 
+    private var presetsSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            caption("Configuraciones guardadas")
+            HStack(spacing: 8) {
+                TextField("Nombre de la configuración…", text: $presetName)
+                    .textFieldStyle(.roundedBorder)
+                Button("Guardar") {
+                    displayManager.savePreset(presetName)
+                    selectedPreset = presetName.trimmingCharacters(in: .whitespaces)
+                    presetName = ""
+                }
+                .disabled(presetName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if !displayManager.presetNames.isEmpty {
+                HStack(spacing: 8) {
+                    Picker("", selection: $selectedPreset) {
+                        Text("Elegir…").tag("")
+                        ForEach(displayManager.presetNames, id: \.self) { Text($0).tag($0) }
+                    }
+                    .labelsHidden()
+                    Button("Cargar") { displayManager.loadPreset(selectedPreset) }
+                        .disabled(selectedPreset.isEmpty)
+                    Button("Borrar") {
+                        displayManager.deletePreset(selectedPreset)
+                        selectedPreset = ""
+                    }
+                    .disabled(selectedPreset.isEmpty)
+                }
+            }
+        }
+    }
+
     private var footer: some View {
-        HStack(spacing: 10) {
-            Button("Restablecer este") {
-                if let d = selected { displayManager.resetCalibration(for: d.name) }
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button("Restablecer este") {
+                    if let d = selected { displayManager.resetCalibration(for: d.name) }
+                }
+                .fixedSize()
+                Button("Restablecer todo") {
+                    for d in displayManager.displays { displayManager.resetCalibration(for: d.name) }
+                }
+                .fixedSize()
+                Spacer()
             }
-            .font(.system(size: 11))
-            Button("Restablecer todo") {
-                for d in displayManager.displays { displayManager.resetCalibration(for: d.name) }
+            HStack {
+                Spacer()
+                Button("Listo") { controller.exit() }
+                    .keyboardShortcut(.defaultAction)
             }
-            .font(.system(size: 11))
-            Spacer()
-            Button("Listo") { controller.exit() }
-                .keyboardShortcut(.defaultAction)
         }
     }
 

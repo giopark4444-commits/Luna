@@ -13,13 +13,40 @@ class DisplayManager: ObservableObject {
     @Published var masterBrightness: Double = 1.0
     @Published private(set) var calibrations: [String: DisplayCalibration] = [:]
     @Published private(set) var calibrationEnabled: Bool = true
+    @Published private(set) var presetNames: [String] = []
 
     private let calibEnabledKey = "luna.calibrationEnabled"
 
     init() {
         calibrations = CalibrationStore.loadAll()
         calibrationEnabled = UserDefaults.standard.object(forKey: calibEnabledKey) as? Bool ?? true
+        presetNames = CalibrationPresetStore.loadAll().keys.sorted()
         refresh()
+    }
+
+    // MARK: - Memoria de configuraciones (presets)
+
+    func savePreset(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty else { return }
+        var all = CalibrationPresetStore.loadAll()
+        all[n] = calibrations
+        CalibrationPresetStore.saveAll(all)
+        presetNames = all.keys.sorted()
+    }
+
+    func loadPreset(_ name: String) {
+        guard let preset = CalibrationPresetStore.loadAll()[name] else { return }
+        calibrations = preset
+        CalibrationStore.saveAll(calibrations)
+        reapplyColor()
+    }
+
+    func deletePreset(_ name: String) {
+        var all = CalibrationPresetStore.loadAll()
+        all[name] = nil
+        CalibrationPresetStore.saveAll(all)
+        presetNames = all.keys.sorted()
     }
 
     /// Enumera los monitores conectados (vía NSScreen) y los controla todos por

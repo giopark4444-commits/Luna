@@ -77,3 +77,21 @@ enum CalibrationStore {
         UserDefaults.standard.set(data, forKey: key)
     }
 }
+
+/// Memoria de configuraciones guardadas: cada preset es la calibración de todos
+/// los monitores (clave = nombre del monitor) bajo un nombre.
+enum CalibrationPresetStore {
+    private static let key = "luna.calibration.presets.v1"
+
+    static func loadAll() -> [String: [String: DisplayCalibration]] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let decoded = try? JSONDecoder().decode([String: [String: DisplayCalibration]].self, from: data)
+        else { return [:] }
+        return decoded
+    }
+
+    static func saveAll(_ all: [String: [String: DisplayCalibration]]) {
+        guard let data = try? JSONEncoder().encode(all) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+}
