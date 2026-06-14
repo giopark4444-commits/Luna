@@ -11,11 +11,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupPopover()
-        // Night Shift comparte el LUT de gamma con la calibración: al cambiar,
-        // reaplicamos la calibración (cede mientras Night Shift está activo).
-        NightShiftManager.shared.onChange = { [weak self] in
-            self?.displayManager.reapplyCalibrations()
-        }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(displaysChanged),

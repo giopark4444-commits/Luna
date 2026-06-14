@@ -15,9 +15,14 @@ final class OverlayDimmer {
 
     private var windows: [CGDirectDisplayID: NSWindow] = [:]       // brillo (capa negra)
     private var tintWindows: [CGDirectDisplayID: NSWindow] = [:]   // tinte de color (calibración)
+    private var warmWindows: [CGDirectDisplayID: NSWindow] = [:]   // Night Shift (capa cálida)
 
     /// Nunca dejamos la pantalla totalmente negra: tope de opacidad de la capa.
     private let maxDim = 0.92
+
+    /// Color cálido del Night Shift (ámbar) y opacidad máxima a intensidad 1.0.
+    private let warmColor = (r: 1.0, g: 0.42, b: 0.0)
+    private let maxWarm = 0.55
 
     /// `brightness` en 0.05–1.0 (1.0 = sin atenuar).
     func setBrightness(_ brightness: Double, for cgID: CGDirectDisplayID) {
@@ -57,12 +62,31 @@ final class OverlayDimmer {
         tintWindows[cgID]?.orderOut(nil)
     }
 
+    /// Capa cálida del Night Shift (overlay). `strength` 0–1 (0 = sin efecto).
+    /// Funciona en cualquier monitor, a diferencia del Night Shift del sistema.
+    func setWarm(strength: Double, for cgID: CGDirectDisplayID) {
+        let alpha = max(0.0, min(maxWarm, strength * maxWarm))
+        if alpha <= 0.001 {
+            warmWindows[cgID]?.orderOut(nil)
+            return
+        }
+        guard let screen = Self.screen(for: cgID) else { return }
+        let window = warmWindows[cgID] ?? makeWindow()
+        warmWindows[cgID] = window
+        window.backgroundColor = NSColor(srgbRed: warmColor.r, green: warmColor.g, blue: warmColor.b, alpha: 1)
+        window.setFrame(screen.frame, display: true)
+        window.alphaValue = CGFloat(alpha)
+        window.orderFrontRegardless()
+    }
+
     /// Quita todas las capas (al salir de la app).
     func removeAll() {
         for window in windows.values { window.orderOut(nil) }
         for window in tintWindows.values { window.orderOut(nil) }
+        for window in warmWindows.values { window.orderOut(nil) }
         windows.removeAll()
         tintWindows.removeAll()
+        warmWindows.removeAll()
     }
 
     // MARK: - Private
