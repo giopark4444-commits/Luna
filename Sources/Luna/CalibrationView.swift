@@ -94,14 +94,14 @@ struct CalibrationView: View {
 
     @ViewBuilder
     private func controls(for d: DisplayInfo) -> some View {
-        let name = d.name
-        let method = displayManager.calibration(for: name).method
+        let key = d.key
+        let method = displayManager.calibration(for: key).method
         let enabled = displayManager.calibrationEnabled
 
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("Método").font(.system(size: 11)).frame(width: 70, alignment: .leading)
-                Picker("", selection: methodBinding(name)) {
+                Picker("", selection: methodBinding(key)) {
                     Text("Software").tag(CalibrationMethod.gamma)
                     Text("Capa de color").tag(CalibrationMethod.overlay)
                     Text("Monitor").tag(CalibrationMethod.manual)
@@ -116,19 +116,19 @@ struct CalibrationView: View {
                 switch method {
                 case .gamma:
                     caption("Ganancia (blancos)")
-                    sliderRow("Rojo",  calBinding(name, \.rGain), 0.5...1.0)
-                    sliderRow("Verde", calBinding(name, \.gGain), 0.5...1.0)
-                    sliderRow("Azul",  calBinding(name, \.bGain), 0.5...1.0)
+                    sliderRow("Rojo",  calBinding(key, \.rGain), 0.5...1.0)
+                    sliderRow("Verde", calBinding(key, \.gGain), 0.5...1.0)
+                    sliderRow("Azul",  calBinding(key, \.bGain), 0.5...1.0)
                     caption("Color de los medios (gamma)")
-                    sliderRow("Rojo",  calBinding(name, \.rGamma), 0.5...2.0)
-                    sliderRow("Verde", calBinding(name, \.gGamma), 0.5...2.0)
-                    sliderRow("Azul",  calBinding(name, \.bGamma), 0.5...2.0)
-                    sliderRow("Negros", calBinding(name, \.black), 0.0...0.2)
+                    sliderRow("Rojo",  calBinding(key, \.rGamma), 0.5...2.0)
+                    sliderRow("Verde", calBinding(key, \.gGamma), 0.5...2.0)
+                    sliderRow("Azul",  calBinding(key, \.bGamma), 0.5...2.0)
+                    sliderRow("Negros", calBinding(key, \.black), 0.0...0.2)
                 case .overlay:
                     caption("Punto blanco (aproximado)")
-                    sliderRow("Rojo",  calBinding(name, \.rGain), 0.5...1.0)
-                    sliderRow("Verde", calBinding(name, \.gGain), 0.5...1.0)
-                    sliderRow("Azul",  calBinding(name, \.bGain), 0.5...1.0)
+                    sliderRow("Rojo",  calBinding(key, \.rGain), 0.5...1.0)
+                    sliderRow("Verde", calBinding(key, \.gGain), 0.5...1.0)
+                    sliderRow("Azul",  calBinding(key, \.bGain), 0.5...1.0)
                 case .manual:
                     EmptyView()
                 }
@@ -185,11 +185,11 @@ struct CalibrationView: View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 Button("Restablecer este") {
-                    if let d = selected { displayManager.resetCalibration(for: d.name) }
+                    if let d = selected { displayManager.resetCalibration(for: d.key) }
                 }
                 .fixedSize()
                 Button("Restablecer todo") {
-                    for d in displayManager.displays { displayManager.resetCalibration(for: d.name) }
+                    for d in displayManager.displays { displayManager.resetCalibration(for: d.key) }
                 }
                 .fixedSize()
                 Spacer()
@@ -226,24 +226,24 @@ struct CalibrationView: View {
         )
     }
 
-    private func calBinding(_ name: String, _ keyPath: WritableKeyPath<DisplayCalibration, Double>) -> Binding<Double> {
+    private func calBinding(_ key: String, _ keyPath: WritableKeyPath<DisplayCalibration, Double>) -> Binding<Double> {
         Binding(
-            get: { displayManager.calibration(for: name)[keyPath: keyPath] },
+            get: { displayManager.calibration(for: key)[keyPath: keyPath] },
             set: { newValue in
-                var c = displayManager.calibration(for: name)
+                var c = displayManager.calibration(for: key)
                 c[keyPath: keyPath] = newValue
-                displayManager.setCalibration(c, for: name)
+                displayManager.setCalibration(c, for: key)
             }
         )
     }
 
-    private func methodBinding(_ name: String) -> Binding<CalibrationMethod> {
+    private func methodBinding(_ key: String) -> Binding<CalibrationMethod> {
         Binding(
-            get: { displayManager.calibration(for: name).method },
+            get: { displayManager.calibration(for: key).method },
             set: { m in
-                var c = displayManager.calibration(for: name)
+                var c = displayManager.calibration(for: key)
                 c.method = m
-                displayManager.setCalibration(c, for: name)
+                displayManager.setCalibration(c, for: key)
             }
         )
     }

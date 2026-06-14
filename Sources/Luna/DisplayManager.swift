@@ -2,8 +2,9 @@ import Foundation
 import Cocoa
 
 struct DisplayInfo: Identifiable {
-    let id: CGDirectDisplayID
-    let name: String
+    let id: CGDirectDisplayID       // puede cambiar al reconectar
+    let key: String                 // clave ESTABLE por monitor físico (persistencia)
+    let name: String                // etiqueta para mostrar
     var brightness: Double          // 0.05 – 1.0
 }
 
@@ -36,7 +37,16 @@ class DisplayManager: ObservableObject {
     }
 
     func loadPreset(_ name: String) {
-        guard let preset = CalibrationPresetStore.loadAll()[name] else { return }
+        guard var preset = CalibrationPresetStore.loadAll()[name] else { return }
+        // Remapear claves por nombre (presets antiguos) a la clave estable actual.
+        for screen in NSScreen.screens {
+            let key = screen.stableKey
+            let nm = screen.localizedName
+            if key != nm, preset[key] == nil, let old = preset[nm] {
+                preset[key] = old
+                preset[nm] = nil
+            }
+        }
         calibrations = preset
         CalibrationStore.saveAll(calibrations)
         reapplyColor()
@@ -52,14 +62,16 @@ class DisplayManager: ObservableObject {
     /// Enumera los monitores conectados (vía NSScreen) y los controla todos por
     /// overlay: uniforme entre monitores e instantáneo (sin DDC ni subprocesos).
     func refresh() {
+        migrateLegacyKeysIfNeeded()
         let previous = Dictionary(uniqueKeysWithValues: displays.map { ($0.id, $0.brightness) })
 
         var result: [DisplayInfo] = []
         for screen in NSScreen.screens {
             guard let cgID = screen.cgDisplayID else { continue }
+            let key = screen.stableKey
             // Prioridad: valor en memoria → guardado en disco → sin atenuar.
-            let brightness = previous[cgID] ?? savedBrightness(for: screen.localizedName) ?? 1.0
-            result.append(DisplayInfo(id: cgID, name: screen.localizedName, brightness: brightness))
+            let brightness = previous[cgID] ?? savedBrightness(for: key) ?? 1.0
+            result.append(DisplayInfo(id: cgID, key: key, name: screen.displayName, brightness: brightness))
         }
         // El monitor principal primero.
         result.sort { CGDisplayIsMain($0.id) != 0 && CGDisplayIsMain($1.id) == 0 }
@@ -73,23 +85,48 @@ class DisplayManager: ObservableObject {
         }
     }
 
-    // MARK: - Calibración de color
+    /// Migra datos guardados con clave por nombre (versión vieja) a la clave
+    /// estable por monitor físico, para los monitores conectados ahora.
+    private func migrateLegacyKeysIfNeeded() {
+        var calChanged = false
+        for screen in NSScreen.screens {
+            guard screen.cgDisplayID != nil else { continue }
+            let key = screen.stableKey
+            let name = screen.localizedName
+            guard key != name, !name.isEmpty else { continue }
 
-    func calibration(for name: String) -> DisplayCalibration {
-        calibrations[name] ?? .neutral
+            if calibrations[key] == nil, let old = calibrations[name] {
+                calibrations[key] = old
+                calibrations[name] = nil
+                calChanged = true
+            }
+            let oldB = "luna.brightness.\(name)"
+            let newB = "luna.brightness.\(key)"
+            if UserDefaults.standard.object(forKey: newB) == nil,
+               let v = UserDefaults.standard.object(forKey: oldB) as? Double {
+                UserDefaults.standard.set(v, forKey: newB)
+            }
+        }
+        if calChanged { CalibrationStore.saveAll(calibrations) }
     }
 
-    func setCalibration(_ cal: DisplayCalibration, for name: String) {
-        calibrations[name] = cal
+    // MARK: - Calibración de color
+
+    func calibration(for key: String) -> DisplayCalibration {
+        calibrations[key] ?? .neutral
+    }
+
+    func setCalibration(_ cal: DisplayCalibration, for key: String) {
+        calibrations[key] = cal
         CalibrationStore.saveAll(calibrations)
-        for d in displays where d.name == name { applyColor(to: d) }
+        for d in displays where d.key == key { applyColor(to: d) }
     }
 
     /// Restablece a neutro pero conserva el método (gamma/overlay/manual) elegido.
-    func resetCalibration(for name: String) {
+    func resetCalibration(for key: String) {
         var cal = DisplayCalibration.neutral
-        cal.method = calibration(for: name).method
-        setCalibration(cal, for: name)
+        cal.method = calibration(for: key).method
+        setCalibration(cal, for: key)
     }
 
     /// Primer pase automático: alinea el punto blanco de cada monitor al de la
@@ -102,7 +139,7 @@ class DisplayManager: ObservableObject {
         guard let refID, let refProfile = AutoCalibrate.profile(for: refID) else { return false }
 
         for d in displays {
-            var cal = calibration(for: d.name)
+            var cal = calibration(for: d.key)
             if d.id == refID {
                 cal.rGain = 1; cal.gGain = 1; cal.bGain = 1
             } else if let g = AutoCalibrate.gains(for: d.id, targetWhite: refProfile.white) {
@@ -110,7 +147,7 @@ class DisplayManager: ObservableObject {
             } else {
                 continue
             }
-            calibrations[d.name] = cal
+            calibrations[d.key] = cal
         }
         calibrationEnabled = true
         UserDefaults.standard.set(true, forKey: calibEnabledKey)
@@ -136,7 +173,7 @@ class DisplayManager: ObservableObject {
     ///   (look natural tipo Apple, negros intactos), combinado con la calibración.
     /// - Monitores overlay/manual: Night Shift va por capa ámbar (aproximado).
     private func applyColor(to display: DisplayInfo) {
-        let cal = calibration(for: display.name)
+        let cal = calibration(for: display.key)
         let calActive = calibrationEnabled && cal.method != .manual
         let warm = NightShiftManager.shared.warmGains()
 
@@ -170,7 +207,7 @@ class DisplayManager: ObservableObject {
         displays[idx].brightness = v
         updateMaster()
         OverlayDimmer.shared.setBrightness(v, for: id)
-        save(v, for: displays[idx].name)
+        save(v, for: displays[idx].key)
     }
 
     func setAllBrightness(_ value: Double) {
@@ -179,7 +216,7 @@ class DisplayManager: ObservableObject {
         for i in displays.indices {
             displays[i].brightness = v
             OverlayDimmer.shared.setBrightness(v, for: displays[i].id)
-            save(v, for: displays[i].name)
+            save(v, for: displays[i].key)
         }
     }
 
@@ -200,21 +237,40 @@ class DisplayManager: ObservableObject {
 
     // MARK: - Persistencia (recuerda el brillo por monitor entre arranques)
 
-    private func defaultsKey(_ name: String) -> String { "luna.brightness.\(name)" }
+    private func defaultsKey(_ key: String) -> String { "luna.brightness.\(key)" }
 
-    private func savedBrightness(for name: String) -> Double? {
-        let key = defaultsKey(name)
-        guard UserDefaults.standard.object(forKey: key) != nil else { return nil }
-        return UserDefaults.standard.double(forKey: key)
+    private func savedBrightness(for key: String) -> Double? {
+        let k = defaultsKey(key)
+        guard UserDefaults.standard.object(forKey: k) != nil else { return nil }
+        return UserDefaults.standard.double(forKey: k)
     }
 
-    private func save(_ value: Double, for name: String) {
-        UserDefaults.standard.set(value, forKey: defaultsKey(name))
+    private func save(_ value: Double, for key: String) {
+        UserDefaults.standard.set(value, forKey: defaultsKey(key))
     }
 }
 
 extension NSScreen {
     var cgDisplayID: CGDirectDisplayID? {
         deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+    }
+
+    /// Etiqueta para mostrar (con respaldo si el monitor no reporta nombre).
+    var displayName: String {
+        let n = localizedName
+        if !n.isEmpty { return n }
+        if let id = cgDisplayID { return "Pantalla \(id)" }
+        return "Pantalla"
+    }
+
+    /// Clave ESTABLE por monitor físico, persistente entre reinicios y única
+    /// incluso entre monitores idénticos (UUID que incorpora el puerto/ubicación).
+    /// Respaldo: fabricante/modelo/serie si el UUID no está disponible.
+    var stableKey: String {
+        guard let id = cgDisplayID else { return "screen:\(localizedName)" }
+        if let uuid = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() {
+            return CFUUIDCreateString(nil, uuid) as String
+        }
+        return "vms:\(CGDisplayVendorNumber(id))-\(CGDisplayModelNumber(id))-\(CGDisplaySerialNumber(id))"
     }
 }
