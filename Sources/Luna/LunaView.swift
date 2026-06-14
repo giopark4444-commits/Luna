@@ -32,7 +32,6 @@ struct LunaView: View {
                 }
             }
             if nightShift.isAvailable {
-                Divider()
                 nightShiftSection
             }
             Divider()
@@ -73,14 +72,14 @@ struct LunaView: View {
     }
 
     private var nightShiftSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Toggle row
+        VStack(alignment: .leading, spacing: 10) {
+            // Encabezado + interruptor principal
             HStack(spacing: 8) {
                 Image(systemName: "sun.haze.fill")
                     .font(.system(size: 12))
                     .foregroundStyle(.orange)
                 Text("Night Shift")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 12, weight: .semibold))
                 Spacer()
                 Toggle("", isOn: Binding(
                     get: { nightShift.isEnabled },
@@ -91,11 +90,8 @@ struct LunaView: View {
                 .scaleEffect(0.75)
                 .frame(width: 38)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, nightShift.isEnabled ? 4 : 10)
 
-            // Intensity slider — only when Night Shift is on
+            // Intensidad (cuando está encendido)
             if nightShift.isEnabled {
                 HStack(spacing: 6) {
                     Image(systemName: "thermometer.low")
@@ -112,13 +108,12 @@ struct LunaView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(Color(hue: 0.08, saturation: 1.0, brightness: 1.0))
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            // Horario
-            Divider().padding(.horizontal, 16)
+            Divider()
+
+            // Programar (parte del mismo Night Shift)
             HStack(spacing: 8) {
                 Image(systemName: "clock")
                     .font(.system(size: 11))
@@ -135,9 +130,6 @@ struct LunaView: View {
                 .scaleEffect(0.75)
                 .frame(width: 38)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, nightShift.scheduleEnabled ? 4 : 10)
 
             if nightShift.scheduleEnabled {
                 VStack(spacing: 6) {
@@ -156,11 +148,17 @@ struct LunaView: View {
                             .labelsHidden()
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+                .padding(.leading, 8)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.secondary.opacity(0.12))
+        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .animation(.easeInOut(duration: 0.15), value: nightShift.isEnabled)
         .animation(.easeInOut(duration: 0.15), value: nightShift.scheduleEnabled)
     }
