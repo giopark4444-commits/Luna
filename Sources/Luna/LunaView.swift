@@ -9,7 +9,6 @@ struct LunaView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider()
             masterRow
             if !displayManager.displays.isEmpty {
                 Divider()
@@ -69,6 +68,12 @@ struct LunaView: View {
             ),
             available: true
         )
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.secondary.opacity(0.12))
+        )
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
     }
 
     private var nightShiftSection: some View {
