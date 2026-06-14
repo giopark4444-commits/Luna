@@ -3,11 +3,12 @@ import SwiftUI
 
 /// Patrones de prueba que se muestran a pantalla completa para comparar al ojo.
 enum CalibrationPattern: String, CaseIterable, Identifiable {
-    case stairs, gray50, white, black, colorBars, gradient
+    case photo, stairs, gray50, white, black, colorBars, gradient
     case solidRed, solidGreen, solidBlue, skin
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .photo:      return "Foto para calibrar"
         case .stairs:     return "Escalera de grises"
         case .gray50:     return "Gris 50%"
         case .white:      return "Blanco"
@@ -89,7 +90,8 @@ final class CalibrationController: NSObject, ObservableObject, NSWindowDelegate 
             // Debajo de las capas de brillo/tinte (.screenSaver) para ver el resultado calibrado.
             window.level = NSWindow.Level(rawValue: Int(NSWindow.Level.screenSaver.rawValue) - 2)
             window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-            let view = PatternView(controller: self, screenFrame: screen.frame, globalFrame: global)
+            let view = PatternView(controller: self, screenName: screen.localizedName,
+                                   screenFrame: screen.frame, globalFrame: global)
             window.contentViewController = NSHostingController(rootView: view)
             window.setFrame(screen.frame, display: true)
             window.orderFrontRegardless()
@@ -122,12 +124,14 @@ final class CalibrationController: NSObject, ObservableObject, NSWindowDelegate 
 
 struct PatternView: View {
     @ObservedObject var controller: CalibrationController
+    let screenName: String
     let screenFrame: CGRect
     let globalFrame: CGRect
 
     var body: some View {
         GeometryReader { geo in
             switch controller.pattern {
+            case .photo:  photo
             case .gray50: Color(white: 0.5)
             case .white:  Color.white
             case .black:  Color.black
@@ -141,6 +145,38 @@ struct PatternView: View {
             }
         }
         .ignoresSafeArea()
+    }
+
+    /// Patrón para fotografiar los 3 monitores: nombre grande + parches a medir.
+    private var photo: some View {
+        ZStack {
+            Color.black
+            VStack(spacing: 40) {
+                Text(screenName)
+                    .font(.system(size: 56, weight: .bold))
+                    .foregroundStyle(.white)
+                HStack(spacing: 0) {
+                    swatch(.white, "BLANCO")
+                    swatch(Color(white: 0.5), "GRIS")
+                    swatch(.red, "R")
+                    swatch(.green, "G")
+                    swatch(.blue, "B")
+                }
+                .frame(height: 260)
+                .frame(maxWidth: 1100)
+            }
+            .padding(40)
+        }
+    }
+
+    private func swatch(_ color: Color, _ label: String) -> some View {
+        ZStack(alignment: .bottom) {
+            color
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color == .white || label == "GRIS" ? .black : .white)
+                .padding(.bottom, 6)
+        }
     }
 
     private var stairs: some View {

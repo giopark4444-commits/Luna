@@ -99,26 +99,27 @@ class DisplayManager: ObservableObject {
         for d in displays { applyCalibration(calibration(for: d.name), to: d) }
     }
 
+    /// Reaplica la calibración a todos los monitores (p. ej. al cambiar Night Shift).
+    func reapplyCalibrations() {
+        for d in displays { applyCalibration(calibration(for: d.name), to: d) }
+    }
+
     private func applyCalibration(_ cal: DisplayCalibration, to display: DisplayInfo) {
-        // Desactivada globalmente o "manual" (menú del monitor): Luna no toca el color.
-        guard calibrationEnabled, cal.method != .manual else {
+        let active = calibrationEnabled && cal.method != .manual
+
+        // Capa de tinte (overlay): independiente del gamma, convive con Night Shift.
+        if active, cal.method == .overlay, let t = cal.overlayTint() {
+            OverlayDimmer.shared.setTint(r: t.r, g: t.g, b: t.b, alpha: t.alpha, for: display.id)
+        } else {
             OverlayDimmer.shared.clearTint(for: display.id)
-            DisplayCalibration.resetGamma(display.id)
-            return
         }
-        switch cal.method {
-        case .gamma:
-            OverlayDimmer.shared.clearTint(for: display.id)
+
+        // El LUT de gamma lo comparte Night Shift: si está activo, no lo tocamos.
+        guard !NightShiftManager.shared.isEnabled else { return }
+        if active, cal.method == .gamma {
             cal.applyGamma(to: display.id)
-        case .overlay:
+        } else {
             DisplayCalibration.resetGamma(display.id)
-            if let t = cal.overlayTint() {
-                OverlayDimmer.shared.setTint(r: t.r, g: t.g, b: t.b, alpha: t.alpha, for: display.id)
-            } else {
-                OverlayDimmer.shared.clearTint(for: display.id)
-            }
-        case .manual:
-            break   // ya manejado en el guard
         }
     }
 

@@ -10,6 +10,9 @@ class NightShiftManager: ObservableObject {
     @Published var strength: Double = 0.5   // 0.0 – 1.0
     @Published var isAvailable: Bool = false
 
+    /// Aviso cuando Night Shift cambia (para que la calibración reaplique el gamma).
+    var onChange: (() -> Void)?
+
     private var client: AnyObject?
 
     private init() {
@@ -53,6 +56,7 @@ class NightShiftManager: ObservableObject {
             let fn = unsafeBitCast(imp, to: SetActiveFn.self)
             fn(c, NSSelectorFromString("setActive:"), ObjCBool(on))
         }
+        onChange?()
     }
 
     func setStrength(_ value: Double) {
@@ -63,5 +67,6 @@ class NightShiftManager: ObservableObject {
             let fn = unsafeBitCast(imp, to: SetStrengthFn.self)
             _ = fn(c, NSSelectorFromString("setStrength:commit:"), Float(strength), ObjCBool(true))
         }
+        onChange?()
     }
 }
