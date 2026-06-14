@@ -17,12 +17,25 @@ class DisplayManager: ObservableObject {
     @Published private(set) var presetNames: [String] = []
 
     private let calibEnabledKey = "luna.calibrationEnabled"
+    private let orderKey = "luna.displayOrder"
+    private var displayOrder: [String] = []   // claves estables en el orden elegido
 
     init() {
         calibrations = CalibrationStore.loadAll()
         calibrationEnabled = UserDefaults.standard.object(forKey: calibEnabledKey) as? Bool ?? true
         presetNames = CalibrationPresetStore.loadAll().keys.sorted()
+        displayOrder = UserDefaults.standard.stringArray(forKey: orderKey) ?? []
         refresh()
+    }
+
+    /// Mueve un monitor arriba/abajo en la lista y guarda el orden elegido.
+    func moveDisplay(_ key: String, up: Bool) {
+        guard let i = displays.firstIndex(where: { $0.key == key }) else { return }
+        let j = up ? i - 1 : i + 1
+        guard displays.indices.contains(j) else { return }
+        displays.swapAt(i, j)
+        displayOrder = displays.map { $0.key }
+        UserDefaults.standard.set(displayOrder, forKey: orderKey)
     }
 
     // MARK: - Memoria de configuraciones (presets)
@@ -109,8 +122,14 @@ class DisplayManager: ObservableObject {
             let brightness = previous[cgID] ?? savedBrightness(for: key) ?? 1.0
             result.append(DisplayInfo(id: cgID, key: key, name: screen.displayName, brightness: brightness))
         }
-        // El monitor principal primero.
-        result.sort { CGDisplayIsMain($0.id) != 0 && CGDisplayIsMain($1.id) == 0 }
+        // Orden elegido por el usuario; si no hay, el principal primero.
+        if displayOrder.isEmpty {
+            result.sort { CGDisplayIsMain($0.id) != 0 && CGDisplayIsMain($1.id) == 0 }
+        } else {
+            result.sort {
+                (displayOrder.firstIndex(of: $0.key) ?? Int.max) < (displayOrder.firstIndex(of: $1.key) ?? Int.max)
+            }
+        }
         displays = result
         updateMaster()
 

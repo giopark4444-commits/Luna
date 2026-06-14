@@ -13,13 +13,18 @@ struct LunaView: View {
             masterRow
             if !displayManager.displays.isEmpty {
                 Divider()
-                ForEach(displayManager.displays) { display in
+                ForEach(Array(displayManager.displays.enumerated()), id: \.element.id) { index, display in
                     DisplayRow(
                         display: display,
                         brightness: Binding(
                             get: { displayManager.displays.first(where: { $0.id == display.id })?.brightness ?? display.brightness },
                             set: { displayManager.setBrightness($0, for: display.id) }
-                        )
+                        ),
+                        showReorder: displayManager.displays.count > 1,
+                        canMoveUp: index > 0,
+                        canMoveDown: index < displayManager.displays.count - 1,
+                        onMoveUp: { displayManager.moveDisplay(display.key, up: true) },
+                        onMoveDown: { displayManager.moveDisplay(display.key, up: false) }
                     )
                     if displayManager.displays.last?.id != display.id {
                         Divider().padding(.horizontal, 16)
@@ -111,8 +116,67 @@ struct LunaView: View {
                 .padding(.bottom, 10)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            // Horario
+            Divider().padding(.horizontal, 16)
+            HStack(spacing: 8) {
+                Image(systemName: "clock")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Text("Programar")
+                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { nightShift.scheduleEnabled },
+                    set: { nightShift.setScheduleEnabled($0) }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .scaleEffect(0.75)
+                .frame(width: 38)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, nightShift.scheduleEnabled ? 4 : 10)
+
+            if nightShift.scheduleEnabled {
+                VStack(spacing: 6) {
+                    HStack {
+                        Text("Activar a las").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Spacer()
+                        DatePicker("", selection: timeBinding({ nightShift.onMinutes }, { nightShift.setOnMinutes($0) }),
+                                   displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
+                    HStack {
+                        Text("Desactivar a las").font(.system(size: 11)).foregroundStyle(.secondary)
+                        Spacer()
+                        DatePicker("", selection: timeBinding({ nightShift.offMinutes }, { nightShift.setOffMinutes($0) }),
+                                   displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .animation(.easeInOut(duration: 0.15), value: nightShift.isEnabled)
+        .animation(.easeInOut(duration: 0.15), value: nightShift.scheduleEnabled)
+    }
+
+    /// Convierte minutos-del-día (Int) ↔ Date para el DatePicker.
+    private func timeBinding(_ get: @escaping () -> Int, _ set: @escaping (Int) -> Void) -> Binding<Date> {
+        Binding(
+            get: {
+                let m = get()
+                return Calendar.current.date(bySettingHour: m / 60, minute: m % 60, second: 0, of: Date()) ?? Date()
+            },
+            set: { date in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: date)
+                set((c.hour ?? 0) * 60 + (c.minute ?? 0))
+            }
+        )
     }
 
     /// Color de la barra de Night Shift: ámbar suave en baja intensidad →
@@ -179,13 +243,23 @@ struct LunaView: View {
 struct DisplayRow: View {
     let display: DisplayInfo
     @Binding var brightness: Double
+    var showReorder = false
+    var canMoveUp = false
+    var canMoveDown = false
+    var onMoveUp: () -> Void = {}
+    var onMoveDown: () -> Void = {}
 
     var body: some View {
         BrightnessRow(
             label: display.name,
             icon: "display",
             brightness: $brightness,
-            available: true
+            available: true,
+            showReorder: showReorder,
+            canMoveUp: canMoveUp,
+            canMoveDown: canMoveDown,
+            onMoveUp: onMoveUp,
+            onMoveDown: onMoveDown
         )
     }
 }
@@ -197,6 +271,11 @@ struct BrightnessRow: View {
     let icon: String
     @Binding var brightness: Double
     let available: Bool
+    var showReorder = false
+    var canMoveUp = false
+    var canMoveDown = false
+    var onMoveUp: () -> Void = {}
+    var onMoveDown: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -209,6 +288,18 @@ struct BrightnessRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer()
+                if showReorder {
+                    Button(action: onMoveUp) { Image(systemName: "chevron.up") }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(canMoveUp ? Color.secondary : Color.secondary.opacity(0.25))
+                        .disabled(!canMoveUp)
+                    Button(action: onMoveDown) { Image(systemName: "chevron.down") }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(canMoveDown ? Color.secondary : Color.secondary.opacity(0.25))
+                        .disabled(!canMoveDown)
+                }
                 Text("\(Int(brightness * 100))%")
                     .font(.system(size: 11).monospacedDigit())
                     .foregroundStyle(.secondary)
