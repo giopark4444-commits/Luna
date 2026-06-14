@@ -3,11 +3,12 @@ import SwiftUI
 
 /// Patrones de prueba que se muestran a pantalla completa para comparar al ojo.
 enum CalibrationPattern: String, CaseIterable, Identifiable {
-    case photo, stairs, gray50, white, black, colorBars, gradient
+    case none, photo, stairs, gray50, white, black, colorBars, gradient
     case solidRed, solidGreen, solidBlue, skin
     var id: String { rawValue }
     var label: String {
         switch self {
+        case .none:       return "Ver mi pantalla (sin patrón)"
         case .photo:      return "Foto para calibrar"
         case .stairs:     return "Escalera de grises"
         case .gray50:     return "Gris 50%"
@@ -26,7 +27,9 @@ enum CalibrationPattern: String, CaseIterable, Identifiable {
 /// Orquesta el "modo calibración": ventanas de patrón en cada monitor + panel flotante.
 @MainActor
 final class CalibrationController: NSObject, ObservableObject, NSWindowDelegate {
-    @Published var pattern: CalibrationPattern = .stairs
+    @Published var pattern: CalibrationPattern = .none {
+        didSet { updatePatternVisibility() }
+    }
     @Published var selectedDisplayID: CGDirectDisplayID?
     @Published var referenceDisplayID: CGDirectDisplayID?
     @Published private(set) var isActive = false
@@ -53,7 +56,9 @@ final class CalibrationController: NSObject, ObservableObject, NSWindowDelegate 
         if displayManager.calibrations.isEmpty {
             displayManager.autoCalibrate(referenceID: referenceDisplayID)
         }
-        showPatternWindows()
+        pattern = .none                 // empezar viendo la pantalla real
+        createPatternWindows()          // se crean ocultas; se muestran al elegir patrón
+        updatePatternVisibility()
         showPanel(displayManager: displayManager)
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53 { self?.exit(); return nil }   // Esc
@@ -80,7 +85,7 @@ final class CalibrationController: NSObject, ObservableObject, NSWindowDelegate 
         NSScreen.screens.reduce(CGRect.null) { $0.union($1.frame) }
     }
 
-    private func showPatternWindows() {
+    private func createPatternWindows() {
         let global = globalFrame()
         for screen in NSScreen.screens {
             let window = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
@@ -94,8 +99,19 @@ final class CalibrationController: NSObject, ObservableObject, NSWindowDelegate 
                                    screenFrame: screen.frame, globalFrame: global)
             window.contentViewController = NSHostingController(rootView: view)
             window.setFrame(screen.frame, display: true)
-            window.orderFrontRegardless()
-            patternWindows.append(window)
+            patternWindows.append(window)   // creadas ocultas
+        }
+    }
+
+    /// Muestra los patrones a pantalla completa, u ocúltalos para ver la pantalla real.
+    private func updatePatternVisibility() {
+        guard isActive || !patternWindows.isEmpty else { return }
+        for window in patternWindows {
+            if pattern == CalibrationPattern.none {
+                window.orderOut(nil)
+            } else {
+                window.orderFrontRegardless()
+            }
         }
     }
 
@@ -131,6 +147,7 @@ struct PatternView: View {
     var body: some View {
         GeometryReader { geo in
             switch controller.pattern {
+            case .none:   Color.clear
             case .photo:  photo
             case .gray50: Color(white: 0.5)
             case .white:  Color.white

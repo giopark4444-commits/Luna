@@ -44,7 +44,7 @@ class NightShiftManager: ObservableObject {
     /// Baja sobre todo el azul y un poco el verde → blanco cálido, negros intactos.
     func warmGains() -> (r: Double, g: Double, b: Double) {
         guard isEnabled else { return (1, 1, 1) }
-        return (1.0, 1.0 - 0.10 * strength, 1.0 - 0.45 * strength)
+        return (1.0, 1.0 - 0.07 * strength, 1.0 - 0.32 * strength)
     }
 
     /// Intensidad de la capa ámbar para monitores que no responden a gamma.
