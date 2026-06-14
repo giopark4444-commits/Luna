@@ -23,8 +23,28 @@ struct DisplayCalibration: Codable, Equatable {
     var bGamma: Double = 1.0
     var black: Double = 0.0     // 0.0–0.2
     var method: CalibrationMethod = .gamma
+    /// Respaldo: si este monitor no calienta con Night Shift por gamma, usar la
+    /// capa cálida (overlay). Lo activa el usuario para su monitor problemático.
+    var nightShiftFallback: Bool = false
 
     static let neutral = DisplayCalibration()
+
+    init() {}
+
+    // Decodificación tolerante: campos ausentes (versiones previas) toman su valor
+    // por defecto, así agregar campos nuevos nunca borra lo ya guardado.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rGain = try c.decodeIfPresent(Double.self, forKey: .rGain) ?? 1.0
+        gGain = try c.decodeIfPresent(Double.self, forKey: .gGain) ?? 1.0
+        bGain = try c.decodeIfPresent(Double.self, forKey: .bGain) ?? 1.0
+        rGamma = try c.decodeIfPresent(Double.self, forKey: .rGamma) ?? 1.0
+        gGamma = try c.decodeIfPresent(Double.self, forKey: .gGamma) ?? 1.0
+        bGamma = try c.decodeIfPresent(Double.self, forKey: .bGamma) ?? 1.0
+        black = try c.decodeIfPresent(Double.self, forKey: .black) ?? 0.0
+        method = try c.decodeIfPresent(CalibrationMethod.self, forKey: .method) ?? .gamma
+        nightShiftFallback = try c.decodeIfPresent(Bool.self, forKey: .nightShiftFallback) ?? false
+    }
 
     var isNeutral: Bool {
         rGain == 1 && gGain == 1 && bGain == 1 &&

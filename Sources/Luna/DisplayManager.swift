@@ -175,7 +175,9 @@ class DisplayManager: ObservableObject {
     private func applyColor(to display: DisplayInfo) {
         let cal = calibration(for: display.key)
         let calActive = calibrationEnabled && cal.method != .manual
-        let warm = NightShiftManager.shared.warmGains()
+        let ns = NightShiftManager.shared
+        // Respaldo: capa cálida en monitores que no calientan por gamma (lo activa el usuario).
+        let useNSOverlay = ns.isEnabled && cal.nightShiftFallback
 
         // Tinte de calibración (solo método overlay).
         if calActive, cal.method == .overlay, let t = cal.overlayTint() {
@@ -184,13 +186,11 @@ class DisplayManager: ObservableObject {
             OverlayDimmer.shared.clearTint(for: display.id)
         }
 
-        // Night Shift por gamma (multiplica las ganancias): limpio, negros intactos,
-        // sin capa ámbar (nada de "lechoso"). Se escribe en TODOS los monitores,
-        // independiente del método de calibración: calienta los que aceptan gamma
-        // (C49RG9x, Wokyis) y es inofensivo en los que la ignoran (LC49G95T → usar
-        // su Eye Saver de hardware para luz cálida).
-        OverlayDimmer.shared.setWarm(strength: 0, for: display.id)
-        // La calibración por gamma solo se incluye si ese es el método del monitor.
+        // Night Shift: por gamma (limpio, negros intactos) por defecto en TODOS los
+        // monitores; o por capa cálida si el usuario marcó el respaldo (su monitor
+        // ignora gamma). Así cualquiera puede corregir su propio caso.
+        OverlayDimmer.shared.setWarm(strength: useNSOverlay ? ns.overlayStrength : 0, for: display.id)
+        let warm = useNSOverlay ? (r: 1.0, g: 1.0, b: 1.0) : ns.warmGains()
         let cg = (calActive && cal.method == .gamma) ? cal : .neutral
         let lo = CGGammaValue(cg.black)
         _ = CGSetDisplayTransferByFormula(

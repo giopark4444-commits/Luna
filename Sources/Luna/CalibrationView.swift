@@ -138,6 +138,13 @@ struct CalibrationView: View {
 
             // El brillo es independiente de la calibración (siempre disponible).
             sliderRow("Brillo", brightnessBinding(d), 0.05...1.0)
+
+            Toggle(isOn: fallbackBinding(key)) {
+                Text("Night Shift: usar capa cálida si este monitor no calienta")
+                    .font(.system(size: 10))
+            }
+            .toggleStyle(.checkbox)
+            .padding(.top, 2)
         }
     }
 
@@ -232,6 +239,17 @@ struct CalibrationView: View {
             set: { newValue in
                 var c = displayManager.calibration(for: key)
                 c[keyPath: keyPath] = newValue
+                displayManager.setCalibration(c, for: key)
+            }
+        )
+    }
+
+    private func fallbackBinding(_ key: String) -> Binding<Bool> {
+        Binding(
+            get: { displayManager.calibration(for: key).nightShiftFallback },
+            set: { v in
+                var c = displayManager.calibration(for: key)
+                c.nightShiftFallback = v
                 displayManager.setCalibration(c, for: key)
             }
         )
