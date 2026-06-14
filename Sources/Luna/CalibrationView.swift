@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
 struct CalibrationView: View {
     @ObservedObject var controller: CalibrationController
@@ -185,7 +187,41 @@ struct CalibrationView: View {
                     .disabled(selectedPreset.isEmpty)
                 }
             }
+            HStack(spacing: 8) {
+                Button("Exportar…") { exportToFile() }
+                Button("Importar…") { importFromFile() }
+                Spacer()
+            }
+            Text("Exporta para respaldar o compartir tu configuración; importa la de otro equipo.")
+                .font(.system(size: 9)).foregroundStyle(.tertiary).fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func exportToFile() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Luna-configuracion.json"
+        panel.allowedContentTypes = [.json]
+        panel.level = NSWindow.Level(rawValue: Int(NSWindow.Level.screenSaver.rawValue) + 2)
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        if let data = try? encoder.encode(displayManager.exportConfig()) {
+            try? data.write(to: url)
+        }
+    }
+
+    private func importFromFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.level = NSWindow.Level(rawValue: Int(NSWindow.Level.screenSaver.rawValue) + 2)
+        NSApp.activate(ignoringOtherApps: true)
+        guard panel.runModal() == .OK, let url = panel.url,
+              let data = try? Data(contentsOf: url),
+              let config = try? JSONDecoder().decode(LunaConfig.self, from: data)
+        else { return }
+        displayManager.importConfig(config)
     }
 
     private var footer: some View {

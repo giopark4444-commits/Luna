@@ -59,6 +59,42 @@ class DisplayManager: ObservableObject {
         presetNames = all.keys.sorted()
     }
 
+    // MARK: - Exportar / Importar (respaldo o compartir con otro usuario)
+
+    func exportConfig() -> LunaConfig {
+        let monitors = displays.map {
+            LunaConfig.MonitorConfig(name: $0.name, brightness: $0.brightness, calibration: calibration(for: $0.key))
+        }
+        return LunaConfig(
+            calibrationEnabled: calibrationEnabled,
+            nightShiftEnabled: NightShiftManager.shared.isEnabled,
+            nightShiftStrength: NightShiftManager.shared.strength,
+            monitors: monitors
+        )
+    }
+
+    /// Aplica una configuración importada, emparejando por nombre de monitor
+    /// (respaldo: por orden) a los monitores conectados ahora.
+    func importConfig(_ config: LunaConfig) {
+        var pool = config.monitors
+        for i in displays.indices {
+            let d = displays[i]
+            let matchIndex = pool.firstIndex { $0.name == d.name } ?? (pool.isEmpty ? nil : pool.startIndex)
+            guard let idx = matchIndex else { continue }
+            let m = pool.remove(at: idx)
+            calibrations[d.key] = m.calibration
+            let b = clamp(m.brightness)
+            displays[i].brightness = b
+            save(b, for: d.key)
+            OverlayDimmer.shared.setBrightness(b, for: d.id)
+        }
+        CalibrationStore.saveAll(calibrations)
+        updateMaster()
+        NightShiftManager.shared.setStrength(config.nightShiftStrength)
+        NightShiftManager.shared.setEnabled(config.nightShiftEnabled)   // reaplica color
+        setCalibrationEnabled(config.calibrationEnabled)                // reaplica color
+    }
+
     /// Enumera los monitores conectados (vía NSScreen) y los controla todos por
     /// overlay: uniforme entre monitores e instantáneo (sin DDC ni subprocesos).
     func refresh() {

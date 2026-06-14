@@ -98,6 +98,23 @@ enum CalibrationStore {
     }
 }
 
+/// Configuración exportable/importable de Luna (para respaldo o compartir con
+/// otro usuario). Se empareja por NOMBRE de monitor al importar, porque la clave
+/// estable (UUID) es distinta en cada máquina.
+struct LunaConfig: Codable {
+    var version: Int = 1
+    var calibrationEnabled: Bool = true
+    var nightShiftEnabled: Bool = false
+    var nightShiftStrength: Double = 0.5
+    var monitors: [MonitorConfig] = []
+
+    struct MonitorConfig: Codable {
+        var name: String
+        var brightness: Double
+        var calibration: DisplayCalibration
+    }
+}
+
 /// Memoria de configuraciones guardadas: cada preset es la calibración de todos
 /// los monitores (clave = nombre del monitor) bajo un nombre.
 enum CalibrationPresetStore {
