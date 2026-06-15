@@ -16,14 +16,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NightShiftManager.shared.onChange = { [weak self] in
             self?.displayManager.reapplyColor()
         }
-        // Teclas de brillo (F1/F2) → brillo de Luna
-        NotificationCenter.default.addObserver(forName: .lunaBrightnessKey, object: nil, queue: .main) { [weak self] note in
-            MainActor.assumeIsolated {
-                let up = (note.userInfo?["up"] as? Bool) ?? true
-                self?.displayManager.nudgeAllBrightness(by: up ? 1.0 / 16.0 : -1.0 / 16.0)
-            }
-        }
-        BrightnessKeys.shared.startIfEnabled()
         setupScrollControl()
         NotificationCenter.default.addObserver(
             self,
