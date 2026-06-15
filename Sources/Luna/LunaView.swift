@@ -193,7 +193,7 @@ struct LunaView: View {
     private var calibrateRow: some View {
         Button(action: onCalibrate) {
             HStack(spacing: 8) {
-                Image(systemName: "paintpalette")
+                Image(systemName: "circle.lefthalf.filled")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                 Text("Calibrar monitores…")

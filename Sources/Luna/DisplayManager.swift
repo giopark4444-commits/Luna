@@ -19,6 +19,7 @@ class DisplayManager: ObservableObject {
     private let calibEnabledKey = "luna.calibrationEnabled"
     private let orderKey = "luna.displayOrder"
     private var displayOrder: [String] = []   // claves estables en el orden elegido
+    private var gammaApplied: Set<CGDirectDisplayID> = []   // monitores con gamma puesta por Luna
 
     init() {
         calibrations = CalibrationStore.loadAll()
@@ -247,6 +248,19 @@ class DisplayManager: ObservableObject {
         OverlayDimmer.shared.setWarm(strength: useNSOverlay ? ns.overlayStrength : 0, for: display.id)
         let warm = useNSOverlay ? (r: 1.0, g: 1.0, b: 1.0) : ns.warmGains()
         let cg = (calActive && cal.method == .gamma) ? cal : .neutral
+
+        // Si Luna no tiene nada que aplicar (sin calibración y Night Shift apagado),
+        // NO tocamos el LUT de gamma → así el control de brillo NATIVO de macOS
+        // (que usa la gamma en monitores externos) sigue funcionando.
+        let neutralGamma = cg.isNeutral && warm.r == 1 && warm.g == 1 && warm.b == 1
+        if neutralGamma {
+            if gammaApplied.contains(display.id) {
+                DisplayCalibration.resetGamma(display.id)   // limpiar el efecto previo de Luna una sola vez
+                gammaApplied.remove(display.id)
+            }
+            return
+        }
+
         let lo = CGGammaValue(cg.black)
         _ = CGSetDisplayTransferByFormula(
             display.id,
@@ -254,6 +268,7 @@ class DisplayManager: ObservableObject {
             lo, CGGammaValue(cg.gGain * warm.g), CGGammaValue(cg.gGamma),
             lo, CGGammaValue(cg.bGain * warm.b), CGGammaValue(cg.bGamma)
         )
+        gammaApplied.insert(display.id)
     }
 
     func setBrightness(_ value: Double, for id: CGDirectDisplayID) {
