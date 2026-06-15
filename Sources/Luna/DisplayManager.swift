@@ -290,6 +290,19 @@ class DisplayManager: ObservableObject {
         }
     }
 
+    /// Sube/baja el brillo de todos los monitores conservando sus diferencias
+    /// (lo usan las teclas de brillo F1/F2).
+    func nudgeAllBrightness(by delta: Double) {
+        guard !displays.isEmpty else { return }
+        for i in displays.indices {
+            let v = clamp(displays[i].brightness + delta)
+            displays[i].brightness = v
+            OverlayDimmer.shared.setBrightness(v, for: displays[i].id)
+            save(v, for: displays[i].key)
+        }
+        updateMaster()
+    }
+
     /// Limpieza al salir: quita capas de atenuado y restaura la curva de color.
     func restoreDisplays() {
         OverlayDimmer.shared.removeAll()

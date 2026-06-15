@@ -4,6 +4,7 @@ struct LunaView: View {
     @ObservedObject var displayManager: DisplayManager
     @ObservedObject var nightShift: NightShiftManager = .shared
     @ObservedObject var loginItem: LoginItem = .shared
+    @ObservedObject var brightnessKeys: BrightnessKeys = .shared
     var onCalibrate: () -> Void = {}
 
     var body: some View {
@@ -35,6 +36,8 @@ struct LunaView: View {
             }
             Divider()
             calibrateRow
+            Divider()
+            brightnessKeysRow
             Divider()
             loginRow
             Divider()
@@ -203,6 +206,27 @@ struct LunaView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
+
+    private var brightnessKeysRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "sun.max")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Text("Teclas de brillo (F1/F2)")
+                .font(.system(size: 12, weight: .medium))
+            Spacer()
+            Toggle("", isOn: Binding(
+                get: { brightnessKeys.isEnabled },
+                set: { brightnessKeys.setEnabled($0) }
+            ))
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .scaleEffect(0.75)
+            .frame(width: 38)
+        }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
     }

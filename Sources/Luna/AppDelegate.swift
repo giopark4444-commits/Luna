@@ -7,6 +7,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover!
     private let displayManager = DisplayManager()
     private let calibration = CalibrationController()
+    private var scrollMonitor: Any?
+    private var globalScrollMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -14,12 +16,49 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NightShiftManager.shared.onChange = { [weak self] in
             self?.displayManager.reapplyColor()
         }
+        // Teclas de brillo (F1/F2) → brillo de Luna
+        NotificationCenter.default.addObserver(forName: .lunaBrightnessKey, object: nil, queue: .main) { [weak self] note in
+            MainActor.assumeIsolated {
+                let up = (note.userInfo?["up"] as? Bool) ?? true
+                self?.displayManager.nudgeAllBrightness(by: up ? 1.0 / 16.0 : -1.0 / 16.0)
+            }
+        }
+        BrightnessKeys.shared.startIfEnabled()
+        setupScrollControl()
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(displaysChanged),
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+    }
+
+    /// Scroll sobre el ícono ☽ para subir/bajar el brillo (sin permisos).
+    private func setupScrollControl() {
+        // Local: cuando la app está activa (p. ej. con el popover abierto).
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self else { return event }
+            return MainActor.assumeIsolated {
+                if self.handleScroll(event) { return nil }
+                return event
+            }
+        }
+        // Global: cuando Luna está en segundo plano (lo normal en barra de menú).
+        globalScrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self else { return }
+            MainActor.assumeIsolated { _ = self.handleScroll(event) }
+        }
+    }
+
+    /// Aplica el scroll al brillo si el cursor está sobre el ícono. Devuelve true si lo manejó.
+    private func handleScroll(_ event: NSEvent) -> Bool {
+        guard let window = statusItem.button?.window else { return false }
+        guard window.frame.contains(NSEvent.mouseLocation) else { return false }
+        let dy = event.scrollingDeltaY
+        guard dy != 0 else { return false }
+        let step = event.hasPreciseScrollingDeltas ? dy * 0.0025 : (dy > 0 ? 0.06 : -0.06)
+        displayManager.nudgeAllBrightness(by: step)
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
